@@ -98,8 +98,10 @@ def ocr(img, whitelist, psm):
 
 def read_date(img):
     h, w = img.shape[:2]
-    roi = img[int(h * 0.045):int(h * 0.11), int(w * 0.25):int(w * 0.75)]
+    roi = img[int(h * 0.058):int(h * 0.093), int(w * 0.36):int(w * 0.66)]
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = cv2.copyMakeBorder(gray, 25, 25, 25, 25,
+                              cv2.BORDER_CONSTANT, value=255)
     save_debug("date.png", gray)
 
     votes = {}
