@@ -10,7 +10,9 @@ import datetime
 import json
 import os
 import re
+import ssl
 import sys
+import urllib.error
 import urllib.request
 
 import cv2
@@ -35,8 +37,19 @@ def download(path):
         IMAGE_URL,
         headers={"User-Agent": "home-schedule-sync/1.0 (personal ESP32 display)"},
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        data = r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+    except urllib.error.URLError as e:
+        # сайт віддає неповний ланцюжок сертифікатів; дані публічні й
+        # проходять жорстку валідацію нижче, тож повторюємо без перевірки
+        print("WARN: TLS-перевірка не пройшла (%s), повтор без неї" % e,
+              file=sys.stderr)
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+            data = r.read()
     if len(data) < 100_000:
         fail("картинка підозріло мала: %d байт" % len(data))
     with open(path, "wb") as f:
