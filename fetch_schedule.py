@@ -101,17 +101,38 @@ def read_date(img):
     roi = img[int(h * 0.045):int(h * 0.11), int(w * 0.25):int(w * 0.75)]
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     save_debug("date.png", gray)
-    for thr in (120, 150, 90, 180):
-        for psm in (7, 6, 13):
-            txt = ocr(binarize(gray, thr), "0123456789.", psm)
-            m = re.search(r"(\d{2})\.(\d{2})\.(20\d{2})", txt)
-            if m:
+
+    votes = {}
+    total = 0
+    for thr in (100, 120, 140, 160, 180):
+        for scale in (2, 3):
+            for psm in (7, 13):
+                txt = ocr(binarize(gray, thr, scale), "0123456789.", psm)
+                total += 1
+                m = re.search(r"(d{2}).(d{2}).(20d{2})", txt)
+                if not m:
+                    continue
                 d, mo, y = map(int, m.groups())
                 try:
-                    return datetime.date(y, mo, d)
+                    key = datetime.date(y, mo, d)
                 except ValueError:
-                    pass
-    fail("не вдалося розпізнати дату на картинці")
+                    continue
+                votes[key] = votes.get(key, 0) + 1
+
+    print("Голоси за дату:", {k.isoformat(): v for k, v in votes.items()},
+          "з", total)
+    if not votes:
+        fail("не вдалося розпізнати дату на картинці")
+
+    best, n = max(votes.items(), key=lambda kv: kv[1])
+    if n < 0.6 * sum(votes.values()) or n < 4:
+        fail("дата розпізнана неоднозначно")
+
+    today = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=2))).date()
+    if abs((best - today).days) > 2:
+        fail("дата на картинці %s надто далека від сьогодні" % best)
+    return best
 
 
 def parse_intervals(raw):
