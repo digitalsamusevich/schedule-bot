@@ -111,7 +111,9 @@ def read_date(img):
             for psm in (7, 13):
                 txt = ocr(binarize(gray, thr, scale), "0123456789.", psm)
                 total += 1
-                m = re.search(r"(d{2}).(d{2}).(20d{2})", txt)
+                m = re.search(r"(d{2})D{0,3}(d{2})D{0,3}(20d{2})", txt)
+                if total <= 6:
+                    print("  raw:", repr(txt.strip()))
                 if not m:
                     continue
                 d, mo, y = map(int, m.groups())
