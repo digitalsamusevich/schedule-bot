@@ -105,15 +105,19 @@ def read_date(img):
     save_debug("date.png", gray)
 
     votes = {}
+    raws = {}
     total = 0
-    for thr in (100, 120, 140, 160, 180):
-        for scale in (2, 3):
+    for thr in (110, 140, 170):
+        for scale in (0.4, 0.5, 0.6, 0.8, 1.0, 1.5):
             for psm in (7, 13):
-                txt = ocr(binarize(gray, thr, scale), "0123456789.", psm)
+                _, bw = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY)
+                bw = cv2.resize(bw, None, fx=scale, fy=scale,
+                                interpolation=cv2.INTER_AREA)
+                txt = ocr(bw, "0123456789.", psm)
                 total += 1
-                m = re.search(r"(d{2})D{0,3}(d{2})D{0,3}(20d{2})", txt)
-                if total <= 6:
-                    print("  raw:", repr(txt.strip()))
+                key_raw = "s%.1f/p%d" % (scale, psm)
+                raws.setdefault(key_raw, []).append(txt.strip())
+                m = re.search(r"(\d{2})\D{0,3}(\d{2})\D{0,3}(20\d{2})", txt)
                 if not m:
                     continue
                 d, mo, y = map(int, m.groups())
@@ -123,6 +127,8 @@ def read_date(img):
                     continue
                 votes[key] = votes.get(key, 0) + 1
 
+    for k, v in sorted(raws.items()):
+        print("  raw", k, v)
     print("Голоси за дату:", {k.isoformat(): v for k, v in votes.items()},
           "з", total)
     if not votes:
