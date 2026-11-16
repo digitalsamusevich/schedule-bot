@@ -160,27 +160,79 @@ def parse_intervals(raw):
     return out
 
 
+def split_rows(dark):
+    """Рядки тексту: групи рядків пікселів із темним текстом."""
+    proj = dark.sum(axis=1) > 3
+    rows = []
+    start = None
+    gap = 0
+    for i, v in enumerate(proj):
+        if v:
+            if start is None:
+                start = i
+            gap = 0
+        elif start is not None:
+            gap += 1
+            if gap > 6:
+                rows.append((start, i - gap))
+                start = None
+                gap = 0
+    if start is not None:
+        rows.append((start, len(proj) - 1 - gap))
+    return [(a, b) for a, b in rows if 18 <= b - a + 1 <= 90]
+
+
 def read_tile(img, tile, name):
+    """Повертає список інтервалів ('HH:MM-HH:MM'); [] = без відключень;
+    None = не вдалося впевнено розпізнати."""
     x, y, w, h = tile
     roi = img[y:y + h, x:x + w]
 
-    body = roi[int(h * 0.28):int(h * 0.96), int(w * 0.20):int(w * 0.98)]
+    body = roi[int(h * 0.22):int(h * 0.97), int(w * 0.20):int(w * 0.99)]
     gray = cv2.cvtColor(body, cv2.COLOR_BGR2GRAY)
     save_debug("tile_%s.png" % name, gray)
 
-    best = None
-    for thr in (120, 100, 140):
-        txt = ocr(binarize(gray, thr), "0123456789:- ", 6)
-        digits = re.sub(r"\D", "", txt)
-        if not digits:
-            best = best or []          # порожня плитка = без відключень
-            continue
-        iv = parse_intervals(txt)
-        if iv:
-            return iv
-    if best is not None:
-        return best
-    return None
+    dark = gray < 120
+    rows = split_rows(dark)
+    print("  рядків тексту у плитці %s: %d" % (name, len(rows)))
+    if not rows:
+        return []
+
+    result = []
+    for ri, (a, b) in enumerate(rows):
+        line = gray[max(0, a - 8):b + 9, :]
+        line = cv2.copyMakeBorder(line, 10, 10, 10, 10,
+                                  cv2.BORDER_CONSTANT, value=255)
+        found = None
+        for thr in (120, 100, 140):
+            _, bw = cv2.threshold(line, thr, 255, cv2.THRESH_BINARY)
+            f = 48.0 / bw.shape[0]
+            bw = cv2.resize(bw, None, fx=f, fy=f,
+                            interpolation=cv2.INTER_AREA)
+            txt = ocr(bw, "0123456789:- ", 7)
+            iv = parse_intervals(txt)
+            if iv is not None and len(iv) == 1:
+                found = iv[0]
+                break
+        if found is None:
+            print("  рядок %d не розпізнано" % ri)
+            return None
+        result.append(found)
+
+    # інтервали мають іти за зростанням і не перетинатись
+    def mins(s):
+        a, b = s.split("-")
+        t = lambda z: int(z[:2]) * 60 + int(z[3:])
+        return t(a), (t(b) or 1440)
+
+    prev_end = -1
+    for s in result:
+        st, en = mins(s)
+        if st < prev_end:
+            print("  інтервали не за порядком:", result)
+            return None
+        prev_end = en
+    return result
 
 
 def label_check(img, tile, expected):
