@@ -262,6 +262,15 @@ def main():
     if img is None:
         fail("не вдалося відкрити зображення")
 
+    # Картинка буває різного розміру (1200 або ~750 px завширшки) із тією ж
+    # розкладкою. Усі розміри в скрипті розраховані на 1200 px: приводимо до них.
+    h0, w0 = img.shape[:2]
+    print("Розмір картинки: %dx%d" % (w0, h0))
+    if abs(w0 - 1200) > 20:
+        f = 1200.0 / w0
+        img = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+        print("Масштабовано до ширини 1200 (x%.2f)" % f)
+
     day = read_date(img)
     print("Дата на картинці:", day.isoformat())
 
